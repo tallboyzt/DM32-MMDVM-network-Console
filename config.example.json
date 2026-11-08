@@ -1,0 +1,16 @@
+{
+  "serial_port": "",
+  "mmdvm_host_path": "",
+  "dmrgateway_path": "",
+  "mmdvm_ini_path": "",
+  "dmrgateway_ini_path": "",
+  "dmr_id": "4600001",
+  "callsign": "BG0ABC",
+  "frequency_mhz": "438.800",
+  "radio_ip": "",
+  "brandmeister": {
+    "server": "4602.master.brandmeister.network",
+    "port": 62031
+  },
+  "web_port": 8080
+}
