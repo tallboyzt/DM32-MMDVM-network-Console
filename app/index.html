@@ -32,6 +32,15 @@ th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase}
 pre{background:#0c0f13;border:1px solid var(--line);border-radius:8px;padding:10px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:auto;max-height:260px;white-space:pre-wrap}
 input,select{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:13px;width:100%}
 label{color:var(--dim);font-size:12px;display:block;margin:6px 0 3px}
+.field{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:8px;margin-bottom:9px}
+.field label{font-size:13px;margin:0}
+.field input{margin:0}
+.section-t{font-size:12px;color:var(--dim);margin:14px 0 8px;letter-spacing:.5px}
+.btns{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.b-save{background:var(--acc);color:#fff}
+.b-start{background:var(--ok);color:#04121f}
+.b-stop{background:var(--bad);color:#fff}
+.b-restart{background:var(--warn);color:#241a02}
 .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
 .col{flex:1;min-width:140px}
 iframe{width:100%;border:1px solid var(--line);border-radius:12px;background:#fff;height:calc(100vh - 215px)}
@@ -67,6 +76,29 @@ a{color:var(--acc2)}
 </div>
 
 <div id="mmdvm-view">
+  <div class="card">
+    <b>参数设置</b>
+    <div class="section-t">电台 / 身份</div>
+    <div class="field"><label>呼号</label><input id="f-call" placeholder="BD6JNF"></div>
+    <div class="field"><label>DMR ID</label><input id="f-id" placeholder="8600309"></div>
+    <div class="section-t">频率 (MHz)</div>
+    <div class="field"><label>接收</label><input id="f-rx" type="number" step="0.001" placeholder="438.800"></div>
+    <div class="field"><label>发射</label><input id="f-tx" type="number" step="0.001" placeholder="438.800"></div>
+    <div class="section-t">DMR</div>
+    <div class="field"><label>色码 CC</label><input id="f-cc" type="number" step="1" placeholder="1"></div>
+    <div class="field"><label>时隙 1</label><input id="f-s1" placeholder="0/1" title="0=关 1=开"></div>
+    <div class="field"><label>时隙 2</label><input id="f-s2" placeholder="0/1" title="0=关 1=开"></div>
+    <div class="section-t">网络 (BrandMeister)</div>
+    <div class="field"><label>服务器</label><input id="f-addr" placeholder="4602.master.brandmeister.network"></div>
+    <div class="field"><label>端口</label><input id="f-port" type="number" step="1" placeholder="62031"></div>
+    <div class="field"><label>密码</label><input id="f-pass" type="password" placeholder="密码"></div>
+    <div class="btns">
+      <button class="b-save" onclick="saveCfg()">保存参数</button>
+      <button class="b-start" onclick="api('/api/restart',{})">重启生效</button>
+    </div>
+    <div class="sub" style="margin-top:8px">修改后点「保存参数」，再点「重启生效」。</div>
+  </div>
+
   <div class="card">
     <div class="row" style="justify-content:space-between;margin-bottom:10px">
       <b>状态</b>
@@ -121,9 +153,8 @@ let curView = null;
 let radioIP = "";
 
 async function api(path, body) {
-  const opt = { method: path.startsWith("/api/") && (path.includes("switch") || path.includes("start") || path.includes("stop") || path.includes("restart") || path.includes("config") || path.includes("password")) ? "POST" : "GET" };
+  const opt = { method: body !== undefined ? "POST" : "GET" };
   if (body !== undefined) {
-    opt.method = "POST";
     opt.headers = { "Content-Type": "application/json" };
     opt.body = JSON.stringify(body);
   }
@@ -239,7 +270,55 @@ async function setPw() {
   }
 }
 
+async function loadConfig() {
+  try {
+    const cfg = await api("/api/config");
+    const mm = cfg.mmdvm, dg = cfg.dmrgateway;
+    document.getElementById("f-call").value = mm.General.Callsign || "";
+    document.getElementById("f-id").value = mm.General.Id || "";
+    document.getElementById("f-rx").value = (parseInt(mm.Modem.RXFrequency || 0) / 1e6).toFixed(3);
+    document.getElementById("f-tx").value = (parseInt(mm.Modem.TXFrequency || 0) / 1e6).toFixed(3);
+    document.getElementById("f-cc").value = mm.DMR.ColorCode || "";
+    document.getElementById("f-s1").value = mm["DMR Network"].Slot1 || "";
+    document.getElementById("f-s2").value = mm["DMR Network"].Slot2 || "";
+    document.getElementById("f-addr").value = dg["DMR Network 1"].Address || "";
+    document.getElementById("f-port").value = dg["DMR Network 1"].Port || "";
+    document.getElementById("f-pass").value = dg["DMR Network 1"].Password || "";
+  } catch (e) {}
+}
+
+function cfgUpdates() {
+  const g = id => document.getElementById(id).value;
+  return [
+    { file: "mmdvm", section: "General", key: "Callsign", value: g("f-call") },
+    { file: "mmdvm", section: "General", key: "Id", value: g("f-id") },
+    { file: "mmdvm", section: "Modem", key: "RXFrequency", value: String(Math.round(parseFloat(g("f-rx")) * 1e6)) },
+    { file: "mmdvm", section: "Modem", key: "TXFrequency", value: String(Math.round(parseFloat(g("f-tx")) * 1e6)) },
+    { file: "mmdvm", section: "DMR", key: "ColorCode", value: g("f-cc") },
+    { file: "mmdvm", section: "DMR Network", key: "Slot1", value: g("f-s1") },
+    { file: "mmdvm", section: "DMR Network", key: "Slot2", value: g("f-s2") },
+    { file: "dmrgateway", section: "General", key: "Id", value: g("f-id") },
+    { file: "dmrgateway", section: "Info", key: "Callsign", value: g("f-call") },
+    { file: "dmrgateway", section: "Info", key: "TXFrequency", value: String(Math.round(parseFloat(g("f-tx")) * 1e6)) },
+    { file: "dmrgateway", section: "Info", key: "RXFrequency", value: String(Math.round(parseFloat(g("f-rx")) * 1e6)) },
+    { file: "dmrgateway", section: "Info", key: "ColorCode", value: g("f-cc") },
+    { file: "dmrgateway", section: "Info", key: "Slot1", value: g("f-s1") },
+    { file: "dmrgateway", section: "Info", key: "Slot2", value: g("f-s2") },
+    { file: "dmrgateway", section: "DMR Network 1", key: "Address", value: g("f-addr") },
+    { file: "dmrgateway", section: "DMR Network 1", key: "Port", value: g("f-port") },
+    { file: "dmrgateway", section: "DMR Network 1", key: "Password", value: g("f-pass") },
+  ];
+}
+
+async function saveCfg() {
+  const d = await api("/api/config", { updates: cfgUpdates() });
+  const n = (d.ini || []).length + (d.applied || []).length;
+  toast("已保存 " + n + " 项参数");
+  loadInfo();
+}
+
 loadInfo();
+loadConfig();
 loadStatus();
 setInterval(loadStatus, 3000);
 </script>
