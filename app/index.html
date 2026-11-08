@@ -48,6 +48,10 @@ iframe{width:100%;border:1px solid var(--line);border-radius:12px;background:#ff
 .note{background:rgba(255,180,84,.08);border:1px solid rgba(255,180,84,.3);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--warn)}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#20262f;border:1px solid var(--line);border-radius:8px;padding:10px 16px;font-size:13px;z-index:99;max-width:90vw;box-shadow:0 4px 20px rgba(0,0,0,.4)}
 .hidden{display:none!important}
+.mview{display:grid;grid-template-columns:320px 1fr;gap:14px;align-items:start}
+@media(max-width:900px){.mview{grid-template-columns:1fr}}
+.mview .card{margin-bottom:14px}
+.mview .card:last-child{margin-bottom:0}
 a{color:var(--acc2)}
 </style>
 </head>
@@ -76,64 +80,70 @@ a{color:var(--acc2)}
 </div>
 
 <div id="mmdvm-view">
-  <div class="card">
-    <b>参数设置</b>
-    <div class="section-t">电台 / 身份</div>
-    <div class="field"><label>呼号</label><input id="f-call" placeholder="BD6JNF"></div>
-    <div class="field"><label>DMR ID</label><input id="f-id" placeholder="8600309"></div>
-    <div class="section-t">频率 (MHz)</div>
-    <div class="field"><label>接收</label><input id="f-rx" type="number" step="0.001" placeholder="438.800"></div>
-    <div class="field"><label>发射</label><input id="f-tx" type="number" step="0.001" placeholder="438.800"></div>
-    <div class="section-t">DMR</div>
-    <div class="field"><label>色码 CC</label><input id="f-cc" type="number" step="1" placeholder="1"></div>
-    <div class="field"><label>时隙 1</label><input id="f-s1" placeholder="0/1" title="0=关 1=开"></div>
-    <div class="field"><label>时隙 2</label><input id="f-s2" placeholder="0/1" title="0=关 1=开"></div>
-    <div class="section-t">网络 (BrandMeister)</div>
-    <div class="field"><label>服务器</label><input id="f-addr" placeholder="4602.master.brandmeister.network"></div>
-    <div class="field"><label>端口</label><input id="f-port" type="number" step="1" placeholder="62031"></div>
-    <div class="field"><label>密码</label><input id="f-pass" type="password" placeholder="密码"></div>
-    <div class="btns">
-      <button class="b-save" onclick="saveCfg()">保存参数</button>
-      <button class="b-start" onclick="api('/api/restart',{})">重启生效</button>
-    </div>
-    <div class="sub" style="margin-top:8px">修改后点「保存参数」，再点「重启生效」。</div>
-  </div>
-
-  <div class="card">
-    <div class="row" style="justify-content:space-between;margin-bottom:10px">
-      <b>状态</b>
-      <div class="row">
-        <button class="b-switch" onclick="api('/api/start',{})">启动</button>
-        <button class="b-switch" onclick="api('/api/stop',{})">停止</button>
-        <button class="b-switch" onclick="api('/api/restart',{})">重启</button>
+  <div class="mview">
+    <div class="config-col">
+      <div class="card">
+        <b>参数设置</b>
+        <div class="section-t">电台 / 身份</div>
+        <div class="field"><label>呼号</label><input id="f-call" placeholder="BD6JNF"></div>
+        <div class="field"><label>DMR ID</label><input id="f-id" placeholder="8600309"></div>
+        <div class="section-t">频率 (MHz)</div>
+        <div class="field"><label>接收</label><input id="f-rx" type="number" step="0.001" placeholder="438.800"></div>
+        <div class="field"><label>发射</label><input id="f-tx" type="number" step="0.001" placeholder="438.800"></div>
+        <div class="section-t">DMR</div>
+        <div class="field"><label>色码 CC</label><input id="f-cc" type="number" step="1" placeholder="1"></div>
+        <div class="field"><label>时隙 1</label><input id="f-s1" placeholder="0/1" title="0=关 1=开"></div>
+        <div class="field"><label>时隙 2</label><input id="f-s2" placeholder="0/1" title="0=关 1=开"></div>
+        <div class="section-t">网络 (BrandMeister)</div>
+        <div class="field"><label>服务器</label><input id="f-addr" placeholder="4602.master.brandmeister.network"></div>
+        <div class="field"><label>端口</label><input id="f-port" type="number" step="1" placeholder="62031"></div>
+        <div class="field"><label>密码</label><input id="f-pass" type="password" placeholder="密码"></div>
+        <div class="btns">
+          <button class="b-save" onclick="saveCfg()">保存参数</button>
+          <button class="b-start" onclick="api('/api/restart',{})">重启生效</button>
+        </div>
+        <div class="sub" style="margin-top:8px">修改后点「保存参数」，再点「重启生效」。</div>
       </div>
     </div>
-    <div class="grid">
-      <div class="stat"><div class="k">模式</div><div class="v" id="s-mode">-</div></div>
-      <div class="stat"><div class="k">DMRGateway</div><div class="v" id="s-dg">-</div></div>
-      <div class="stat"><div class="k">MMDVMHost</div><div class="v" id="s-mh">-</div></div>
-      <div class="stat"><div class="k">呼号</div><div class="v" id="s-call">-</div></div>
-      <div class="stat"><div class="k">频率</div><div class="v" id="s-freq">-</div></div>
-      <div class="stat"><div class="k">DMR ID</div><div class="v" id="s-id">-</div></div>
-    </div>
-  </div>
 
-  <div class="card">
-    <b>最近通联 (QSO)</b>
-    <div style="margin-top:8px;overflow:auto;max-height:220px">
-      <table><thead><tr><th>时间</th><th>源</th><th>目标</th><th>时隙</th><th>RSSI</th></tr></thead>
-      <tbody id="qso-body"><tr><td colspan="5" class="sub">暂无</td></tr></tbody></table>
-    </div>
-  </div>
+    <div class="main-col">
+      <div class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:10px">
+          <b>状态</b>
+          <div class="row">
+            <button class="b-switch" onclick="api('/api/start',{})">启动</button>
+            <button class="b-switch" onclick="api('/api/stop',{})">停止</button>
+            <button class="b-switch" onclick="api('/api/restart',{})">重启</button>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="stat"><div class="k">模式</div><div class="v" id="s-mode">-</div></div>
+          <div class="stat"><div class="k">DMRGateway</div><div class="v" id="s-dg">-</div></div>
+          <div class="stat"><div class="k">MMDVMHost</div><div class="v" id="s-mh">-</div></div>
+          <div class="stat"><div class="k">呼号</div><div class="v" id="s-call">-</div></div>
+          <div class="stat"><div class="k">频率</div><div class="v" id="s-freq">-</div></div>
+          <div class="stat"><div class="k">DMR ID</div><div class="v" id="s-id">-</div></div>
+        </div>
+      </div>
 
-  <div class="grid">
-    <div class="card">
-      <b>MMDVM 日志</b>
-      <pre id="log-mm">-</pre>
-    </div>
-    <div class="card">
-      <b>DMRGateway 日志</b>
-      <pre id="log-dg">-</pre>
+      <div class="card">
+        <b>最近通联 (QSO)</b>
+        <div style="margin-top:8px;overflow:auto;max-height:220px">
+          <table><thead><tr><th>时间</th><th>源</th><th>目标</th><th>时隙</th><th>RSSI</th></tr></thead>
+          <tbody id="qso-body"><tr><td colspan="5" class="sub">暂无</td></tr></tbody></table>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <b>MMDVM 日志</b>
+          <pre id="log-mm">-</pre>
+        </div>
+        <div class="card">
+          <b>DMRGateway 日志</b>
+          <pre id="log-dg">-</pre>
+        </div>
+      </div>
     </div>
   </div>
 </div>
