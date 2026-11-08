@@ -360,6 +360,63 @@ def update_ini(path, section, key, value):
     return changed
 
 
+def apply_ini(updates):
+    cfg = load_config()
+    ini_paths = {"mmdvm": cfg.get("mmdvm_ini_path", ""),
+                 "dmrgateway": cfg.get("dmrgateway_ini_path", "")}
+    done = []
+    for u in updates:
+        f = u.get("file")
+        section = u.get("section")
+        key = u.get("key")
+        value = str(u.get("value", ""))
+        path = ini_paths.get(f, "")
+        if not path or not section or not key:
+            continue
+        if update_ini(path, section, key, value):
+            done.append("%s.%s.%s=%s" % (f, section, key, value))
+    return done
+
+
+def get_config():
+    cfg = load_config()
+    mm = read_ini(cfg.get("mmdvm_ini_path", ""))
+    dg = read_ini(cfg.get("dmrgateway_ini_path", ""))
+    dg1 = dg.get("DMR Network 1", {})
+    mm_dn = mm.get("DMR Network", {})
+    return {
+        "mmdvm": {
+            "General": {"Callsign": mm.get("General", {}).get("Callsign", ""),
+                        "Id": mm.get("General", {}).get("Id", ""),
+                        "Duplex": mm.get("General", {}).get("Duplex", "0")},
+            "Modem": {"UARTPort": mm.get("Modem", {}).get("UARTPort", ""),
+                      "RXFrequency": mm.get("Modem", {}).get("RXFrequency", ""),
+                      "TXFrequency": mm.get("Modem", {}).get("TXFrequency", "")},
+            "DMR": {"ColorCode": mm.get("DMR", {}).get("ColorCode", "")},
+            "DMR Network": {"Enable": mm_dn.get("Enable", ""),
+                            "GatewayAddress": mm_dn.get("GatewayAddress", ""),
+                            "GatewayPort": mm_dn.get("GatewayPort", ""),
+                            "Slot1": mm_dn.get("Slot1", ""),
+                            "Slot2": mm_dn.get("Slot2", "")},
+        },
+        "dmrgateway": {
+            "General": {"Id": dg.get("General", {}).get("Id", "")},
+            "Info": {"Callsign": dg.get("Info", {}).get("Callsign", ""),
+                     "TXFrequency": dg.get("Info", {}).get("TXFrequency", ""),
+                     "RXFrequency": dg.get("Info", {}).get("RXFrequency", ""),
+                     "Duplex": dg.get("Info", {}).get("Duplex", "0"),
+                     "ColorCode": dg.get("Info", {}).get("ColorCode", ""),
+                     "Slot1": dg.get("Info", {}).get("Slot1", ""),
+                     "Slot2": dg.get("Info", {}).get("Slot2", "")},
+            "DMR Network 1": {"Enabled": dg1.get("Enabled", ""),
+                              "Name": dg1.get("Name", ""),
+                              "Address": dg1.get("Address", ""),
+                              "Port": dg1.get("Port", ""),
+                              "Password": dg1.get("Password", "")},
+        },
+    }
+
+
 # ---------- 日志解析 (QSO) ----------
 
 QSO_RE = re.compile(
@@ -416,6 +473,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(info())
         elif p == "/api/mode":
             self._json({"mode": get_mode(), "device": get_device()})
+        elif p == "/api/config":
+            self._json(get_config())
         elif p == "/api/password":
             self._json({"set": has_sudo_pw(), "platform": "mac" if IS_MAC else "win"})
         else:
@@ -439,15 +498,18 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
         elif p == "/api/config":
             updates = data.get("updates", [])
+            ini_done = apply_ini([u for u in updates if u.get("file")])
             cfg = load_config()
             done = []
             for it in updates:
+                if it.get("file"):
+                    continue
                 k, v = it.get("key"), it.get("value")
                 if k in cfg and k != "brandmeister":
                     cfg[k] = v
                     done.append(k)
             save_config(cfg)
-            self._json({"ok": True, "applied": done})
+            self._json({"ok": True, "applied": done, "ini": ini_done})
         elif p == "/api/password":
             pw = data.get("password", "")
             if pw:
