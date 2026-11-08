@@ -32,7 +32,7 @@
 ### macOS（独立 App）
 
 ```bash
-chmod +x make_app.sh
+chmod +x make_app.sh launch.sh app/ppp_start.sh
 ./make_app.sh           # 默认生成到 /Applications，生成 "MMDVM控制台.app"
 open /Applications/MMDVM控制台.app
 ```
