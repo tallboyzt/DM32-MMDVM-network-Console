@@ -1,4 +1,16 @@
+# 编译产物 / 第三方源码 / 便携包（都能用 tools/ 下的脚本重新生成）
+bin/
+dist/
+src/
+tools/cache/
+tools/radiofoundry/
+*.zip
+
+# 运行时
 config.json
-*.pyc
+logs/
+*.log
+
+# Python
 __pycache__/
-.DS_Store
+*.pyc

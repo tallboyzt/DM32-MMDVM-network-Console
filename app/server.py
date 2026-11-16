@@ -15,6 +15,7 @@ import time
 import platform
 import shlex
 import subprocess
+import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -24,9 +25,18 @@ IS_WIN = platform.system() == "Windows"
 APP_NAME = "MMDVM-Console"
 KEYCHAIN_SERVICE = "mmdvm-console"
 
+# 程序根目录（app/ 的上一级），相对路径以它为基准
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 允许 config.json 里写相对路径，便于整包复制到别的电脑
+_PATH_KEYS = ("mmdvm_host_path", "dmrgateway_path", "mmdvm_ini_path", "dmrgateway_ini_path")
+
 CONFIG_PATH = None
-MMDVM_LOG = "/tmp/mmdvm.log"
-DMRGW_LOG = "/tmp/dmrgateway.log"
+if IS_WIN:
+    LOG_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), APP_NAME, "logs")
+else:
+    LOG_DIR = "/tmp"
+MMDVM_LOG = os.path.join(LOG_DIR, "mmdvm.log")
+DMRGW_LOG = os.path.join(LOG_DIR, "dmrgateway.log")
 
 DEFAULTS = {
     "serial_port": "",
@@ -77,6 +87,10 @@ def load_config():
                 cfg[k] = v
     except Exception:
         pass
+    for k in _PATH_KEYS:
+        v = cfg.get(k) or ""
+        if v and not os.path.isabs(v):
+            cfg[k] = os.path.join(PROJECT_ROOT, v)
     return cfg
 
 
@@ -197,6 +211,10 @@ def chain_names():
 def _spawn(exe, args, log):
     if not exe or not os.path.exists(exe):
         return
+    try:
+        os.makedirs(os.path.dirname(log), exist_ok=True)
+    except Exception:
+        pass
     if IS_WIN:
         try:
             with open(log, "w") as f:
@@ -265,27 +283,104 @@ def ppp_sudo(action):
     return rc, out, err
 
 
+# ---------- 电台面板 (Windows: 无 pppd，用 RadioFoundry 调试链路取屏/按键) ----------
+
+PANEL_TOOLS_DIR = os.path.join(PROJECT_ROOT, "tools", "radiofoundry", "tools")
+
+PANEL_ACTIVE = False
+_panel_lock = threading.Lock()
+_panel_cache = {"png": None, "ts": 0.0}
+
+
+def _panel_mod():
+    if not os.path.isdir(PANEL_TOOLS_DIR):
+        raise RuntimeError("缺少 tools/radiofoundry：先运行 tools/fetch-radiofoundry.sh 获取调试链路")
+    if PANEL_TOOLS_DIR not in sys.path:
+        sys.path.insert(0, PANEL_TOOLS_DIR)
+    import rfoundry_debug
+    return rfoundry_debug
+
+
+def _panel_open(rd, timeout=1.5):
+    dev = get_device()
+    if not dev:
+        raise RuntimeError("没有可用串口")
+    return rd.DebugLink(port=dev, timeout=timeout)
+
+
+def panel_screen(max_age=0.8):
+    """电台屏幕的 PNG（短暂缓存，避免每次刷新都读串口）。"""
+    with _panel_lock:
+        if _panel_cache["png"] is not None and time.time() - _panel_cache["ts"] < max_age:
+            return _panel_cache["png"]
+        rd = _panel_mod()
+        link = _panel_open(rd)
+        try:
+            info, data, _stable = link.screenshot(2)
+        finally:
+            try:
+                link.close()
+            except Exception:
+                pass
+        w, h, rows = rd.to_rgb(info, data, False)
+        tmp = os.path.join(LOG_DIR, "panel.png")
+        try:
+            os.makedirs(LOG_DIR, exist_ok=True)
+            rd.write_png(tmp, w, h, rows)
+            with open(tmp, "rb") as f:
+                png = f.read()
+        finally:
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+        _panel_cache.update(png=png, ts=time.time())
+        return png
+
+
+def panel_key(name):
+    rd = _panel_mod()
+    link = _panel_open(rd)
+    try:
+        link.key(name, rd.PRESS)
+    finally:
+        try:
+            link.close()
+        except Exception:
+            pass
+
+
 # ---------- 模式 ----------
 
 def get_mode():
-    cfg = load_config()
     dg, mh = chain_names()
     if proc_running(mh):
         return "hotspot"
+    if IS_WIN:
+        return "network" if PANEL_ACTIVE else "unknown"
     if IS_MAC and proc_running("pppd"):
         return "network"
     return "unknown"
 
 
 def switch_mode():
+    global PANEL_ACTIVE
     mode = get_mode()
     if mode == "hotspot":
         stop_chain()
         time.sleep(1)
+        if IS_WIN:
+            PANEL_ACTIVE = True
+            return {"mode": "network", "ppp": True,
+                    "ppp_out": "已停止热点；DM-32UV 无 USB，Windows 无 pppd，改用调试链路电台面板"}
         rc, out, err = ppp_sudo("start")
         return {"mode": "network", "ppp": rc == 0,
                 "ppp_out": (out + err).strip() or ("ok" if rc == 0 else "启动失败")}
     if mode == "network":
+        if IS_WIN:
+            PANEL_ACTIVE = False
+            start_chain()
+            return {"mode": "hotspot", "ppp": True, "ppp_out": "已启动热点"}
         rc, out, err = ppp_sudo("stop")
         time.sleep(1)
         start_chain()
@@ -477,6 +572,13 @@ class Handler(BaseHTTPRequestHandler):
             self._json(get_config())
         elif p == "/api/password":
             self._json({"set": has_sudo_pw(), "platform": "mac" if IS_MAC else "win"})
+        elif p == "/api/panel/screen":
+            try:
+                png = panel_screen()
+            except Exception as e:
+                self._json({"error": str(e)}, 503)
+                return
+            self._send(200, png, "image/png")
         else:
             self._json({"error": "not found"}, 404)
 
@@ -515,6 +617,14 @@ class Handler(BaseHTTPRequestHandler):
             if pw:
                 set_sudo_pw(pw)
             self._json({"ok": True, "set": has_sudo_pw()})
+        elif p == "/api/panel/key":
+            name = str(data.get("key", ""))
+            try:
+                panel_key(name)
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)}, 503)
+                return
+            self._json({"ok": True})
         else:
             self._json({"error": "not found"}, 404)
 
@@ -535,6 +645,7 @@ def info():
         "radio_ip": radio_ip(),
         "password_set": has_sudo_pw(),
         "platform": "mac" if IS_MAC else "win",
+        "panel": IS_WIN,
         "configured": bool(cfg.get("mmdvm_host_path") and cfg.get("mmdvm_ini_path")),
     }
 

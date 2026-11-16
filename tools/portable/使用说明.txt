@@ -1,0 +1,60 @@
+MMDVM 控制台 · Windows 便携版
+================================
+
+这是一个免安装的绿色包：整个文件夹复制到任何 Windows 10/11 64 位电脑，
+双击 launch.bat 就能用，不需要装 Python，也不需要编译。
+
+
+一、怎么用
+----------
+1. 把压缩包解压到任意目录（例如 D:\MMDVM-Console）。
+   注意：不要放在 C:\Program Files 下面，那个目录默认不让写文件。
+2. 用写频线把 DM-32UV 电台接到电脑，开机。
+   如果电脑没认出串口，先装 CH340 驱动（多数 Win10/11 联网后会自动装）。
+3. 双击 launch.bat。浏览器会自动打开 http://127.0.0.1:8080/
+4. 第一次运行会在同目录生成 config.json（路径都是相对路径，换电脑不用改）。
+
+
+二、第一次要填的参数
+--------------------
+网页底部「参数设置」里填：
+  · 呼号、DMR ID
+  · BrandMeister 密码（在 BM 自服务里给热点设的那个）
+  · 服务器默认 4602.master.brandmeister.network:62031
+  · 接收/发射默认 438.800，色码 1，时隙 1=0、时隙 2=1（单频热点）
+填完点「保存参数」，再点「重启生效」。
+
+
+三、两个按钮
+------------
+· 启动 / 停止 / 重启：控制 MMDVMHost + DMRGateway（热点模式）。
+· 切换到网络：停止热点，显示电台实时屏幕和按键（读屏 + 按键，等同电台面板）。
+  点「切换回热点」恢复。注意：同一时间只有一方能占用串口。
+
+
+四、常见问题
+------------
+· 页面打不开：看网页窗口是否还开着；端口 8080 被别的程序占用时，
+  改 config.json 里的 web_port，然后重新双击 launch.bat。
+· 点启动没反应：打开 logs\mmdvm.log 看最后几行（日志在
+  %LOCALAPPDATA%\MMDVM-Console\logs\）。
+· 提示串口被占用：关掉写频软件（DMR CPS）等占用 COM 口的程序。
+· 换 USB 口后串口号变了：改 mmdvm\MMDVM.ini 里 [Modem] 的 UARTPort=\\.\COMx。
+· 关掉那个最小化的黑色窗口，控制台就停止了。
+
+
+五、目录说明
+------------
+launch.bat        启动器
+config.json       本机配置（首次运行生成）
+app\              控制台网页与后端
+bin\              MMDVMHost.exe / DMRGateway.exe 及其运行库
+mmdvm\            MMDVM.ini / DMRGateway.ini 热点配置
+runtime\          内置 Python 3.13（含 pyserial）
+tools\            辅助脚本与 RadioFoundry 调试链路
+
+
+六、注意
+--------
+· 仅用于业余无线电用途，遵守当地法规和 BrandMeister 使用条款。
+· 控制台只监听 127.0.0.1，不会对外网开放。
